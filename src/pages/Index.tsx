@@ -6,6 +6,9 @@ import { Badge } from '@/components/ui/badge';
 import Icon from '@/components/ui/icon';
 import { Slider } from '@/components/ui/slider';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useCart } from '@/contexts/CartContext';
+import CartDrawer from '@/components/cart/CartDrawer';
+import { useToast } from '@/hooks/use-toast';
 
 interface Toy {
   id: number;
@@ -65,11 +68,27 @@ const levenshteinDistance = (str1: string, str2: string): number => {
 };
 
 export default function Index() {
+  const { addToCart } = useCart();
+  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Все');
   const [selectedAges, setSelectedAges] = useState<string[]>([]);
   const [priceRange, setPriceRange] = useState([0, 5000]);
   const [showInStockOnly, setShowInStockOnly] = useState(false);
+
+  const handleAddToCart = (toy: Toy) => {
+    addToCart({
+      id: toy.id,
+      name: toy.name,
+      price: toy.price,
+      image: toy.image,
+      emoji: toy.emoji,
+    });
+    toast({
+      title: 'Добавлено в корзину! 🎉',
+      description: `${toy.name} добавлен в вашу корзину`,
+    });
+  };
 
   const suggestions = useMemo(() => {
     if (!searchQuery || searchQuery.length < 2) return [];
@@ -119,10 +138,7 @@ export default function Index() {
             <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent animate-fade-in">
               🎪 Магазин Игрушек
             </h1>
-            <Button size="lg" className="gap-2 animate-bounce-soft">
-              <Icon name="ShoppingCart" size={20} />
-              <span className="font-semibold">0</span>
-            </Button>
+            <CartDrawer />
           </div>
           
           <div className="relative">
@@ -285,6 +301,7 @@ export default function Index() {
                       className="w-full gap-2 group-hover:scale-105 transition-transform" 
                       size="lg"
                       disabled={!toy.inStock}
+                      onClick={() => handleAddToCart(toy)}
                     >
                       <Icon name="ShoppingBag" size={18} />
                       В корзину
