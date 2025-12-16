@@ -8,7 +8,11 @@ import Icon from '@/components/ui/icon';
 import { Slider } from '@/components/ui/slider';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useCart } from '@/contexts/CartContext';
+import { useWishlist } from '@/contexts/WishlistContext';
+import { useCompare } from '@/contexts/CompareContext';
+import { useReviews } from '@/contexts/ReviewContext';
 import CartDrawer from '@/components/cart/CartDrawer';
+import ProductModal from '@/components/product/ProductModal';
 import { useToast } from '@/hooks/use-toast';
 
 interface Toy {
@@ -70,12 +74,16 @@ const levenshteinDistance = (str1: string, str2: string): number => {
 
 export default function Index() {
   const { addToCart } = useCart();
+  const { toggleWishlist, isInWishlist } = useWishlist();
+  const { toggleCompare, isInCompare, items: compareItems } = useCompare();
+  const { getProductRating } = useReviews();
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Все');
   const [selectedAges, setSelectedAges] = useState<string[]>([]);
   const [priceRange, setPriceRange] = useState([0, 5000]);
   const [showInStockOnly, setShowInStockOnly] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Toy | null>(null);
 
   const handleAddToCart = (toy: Toy) => {
     addToCart({
@@ -88,6 +96,51 @@ export default function Index() {
     toast({
       title: 'Добавлено в корзину! 🎉',
       description: `${toy.name} добавлен в вашу корзину`,
+    });
+  };
+
+  const handleToggleWishlist = (toy: Toy, e: React.MouseEvent) => {
+    e.stopPropagation();
+    toggleWishlist({
+      id: toy.id,
+      name: toy.name,
+      price: toy.price,
+      emoji: toy.emoji,
+      category: toy.category,
+      age: toy.age,
+    });
+    toast({
+      title: isInWishlist(toy.id) ? 'Удалено из избранного' : 'Добавлено в избранное! ❤️',
+      description: isInWishlist(toy.id) 
+        ? `${toy.name} удалён из списка желаний`
+        : `${toy.name} добавлен в избранное`,
+    });
+  };
+
+  const handleToggleCompare = (toy: Toy, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (compareItems.length >= 4 && !isInCompare(toy.id)) {
+      toast({
+        title: 'Максимум 4 товара',
+        description: 'Можно сравнить только 4 товара одновременно',
+        variant: 'destructive',
+      });
+      return;
+    }
+    toggleCompare({
+      id: toy.id,
+      name: toy.name,
+      price: toy.price,
+      emoji: toy.emoji,
+      category: toy.category,
+      age: toy.age,
+      inStock: toy.inStock,
+    });
+    toast({
+      title: isInCompare(toy.id) ? 'Удалено из сравнения' : 'Добавлено к сравнению',
+      description: isInCompare(toy.id)
+        ? `${toy.name} удалён из сравнения`
+        : `${toy.name} добавлен к сравнению`,
     });
   };
 
@@ -140,10 +193,27 @@ export default function Index() {
               🎪 Магазин Игрушек
             </h1>
             <div className="flex items-center gap-3">
+              <Link to="/wishlist">
+                <Button variant="outline" size="lg" className="gap-2 relative">
+                  <Icon name="Heart" size={20} />
+                  <span className="hidden sm:inline">Избранное</span>
+                </Button>
+              </Link>
+              <Link to="/compare">
+                <Button variant="outline" size="lg" className="gap-2 relative">
+                  <Icon name="GitCompare" size={20} />
+                  <span className="hidden sm:inline">Сравнить</span>
+                  {compareItems.length > 0 && (
+                    <Badge className="absolute -top-2 -right-2 h-5 w-5 flex items-center justify-center p-0 bg-secondary text-secondary-foreground">
+                      {compareItems.length}
+                    </Badge>
+                  )}
+                </Button>
+              </Link>
               <Link to="/orders">
                 <Button variant="outline" size="lg" className="gap-2">
                   <Icon name="Package" size={20} />
-                  <span className="hidden sm:inline">Мои заказы</span>
+                  <span className="hidden sm:inline">Заказы</span>
                 </Button>
               </Link>
               <CartDrawer />
@@ -266,58 +336,99 @@ export default function Index() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {filteredToys.map((toy, idx) => (
-                <Card 
-                  key={toy.id} 
-                  className="group hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 rounded-2xl border-2 overflow-hidden animate-scale-in"
-                  style={{ animationDelay: `${idx * 0.05}s` }}
-                >
-                  <CardContent className="p-0">
-                    <div className="relative bg-gradient-to-br from-primary/10 via-secondary/10 to-accent/10 h-48 flex items-center justify-center">
-                      <span className="text-8xl group-hover:scale-110 transition-transform duration-300">
-                        {toy.emoji}
-                      </span>
-                      {!toy.inStock && (
-                        <Badge variant="destructive" className="absolute top-2 right-2">
-                          Нет в наличии
-                        </Badge>
-                      )}
-                      {toy.inStock && (
-                        <Badge className="absolute top-2 right-2 bg-success text-success-foreground">
-                          В наличии
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="p-4">
-                      <h3 className="font-bold text-lg mb-2 group-hover:text-primary transition-colors">
-                        {toy.name}
-                      </h3>
-                      <div className="flex items-center gap-2 mb-2">
-                        <Badge variant="outline" className="text-xs">
-                          {toy.age} лет
-                        </Badge>
-                        <Badge variant="secondary" className="text-xs">
-                          {toy.category}
-                        </Badge>
+              {filteredToys.map((toy, idx) => {
+                const rating = getProductRating(toy.id);
+                return (
+                  <Card 
+                    key={toy.id} 
+                    className="group hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 rounded-2xl border-2 overflow-hidden animate-scale-in cursor-pointer"
+                    style={{ animationDelay: `${idx * 0.05}s` }}
+                    onClick={() => setSelectedProduct(toy)}
+                  >
+                    <CardContent className="p-0">
+                      <div className="relative bg-gradient-to-br from-primary/10 via-secondary/10 to-accent/10 h-48 flex items-center justify-center">
+                        <span className="text-8xl group-hover:scale-110 transition-transform duration-300">
+                          {toy.emoji}
+                        </span>
+                        {!toy.inStock && (
+                          <Badge variant="destructive" className="absolute top-2 left-2">
+                            Нет в наличии
+                          </Badge>
+                        )}
+                        {toy.inStock && (
+                          <Badge className="absolute top-2 left-2 bg-success text-success-foreground">
+                            В наличии
+                          </Badge>
+                        )}
+                        <div className="absolute top-2 right-2 flex gap-1">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className={`bg-white/90 hover:bg-white h-8 w-8 ${isInWishlist(toy.id) ? 'text-red-500' : ''}`}
+                            onClick={(e) => handleToggleWishlist(toy, e)}
+                          >
+                            <Icon name={isInWishlist(toy.id) ? "Heart" : "Heart"} className="h-4 w-4" fill={isInWishlist(toy.id) ? "currentColor" : "none"} />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className={`bg-white/90 hover:bg-white h-8 w-8 ${isInCompare(toy.id) ? 'text-primary' : ''}`}
+                            onClick={(e) => handleToggleCompare(toy, e)}
+                          >
+                            <Icon name="GitCompare" className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
-                      <p className="text-2xl font-bold text-primary">
-                        {toy.price} ₽
-                      </p>
-                    </div>
-                  </CardContent>
-                  <CardFooter className="p-4 pt-0">
-                    <Button 
-                      className="w-full gap-2 group-hover:scale-105 transition-transform" 
-                      size="lg"
-                      disabled={!toy.inStock}
-                      onClick={() => handleAddToCart(toy)}
-                    >
-                      <Icon name="ShoppingBag" size={18} />
-                      В корзину
-                    </Button>
-                  </CardFooter>
-                </Card>
-              ))}
+                      <div className="p-4">
+                        <h3 className="font-bold text-lg mb-2 group-hover:text-primary transition-colors">
+                          {toy.name}
+                        </h3>
+                        {rating.count > 0 && (
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="flex items-center gap-1">
+                              {Array.from({ length: 5 }).map((_, i) => (
+                                <Icon
+                                  key={i}
+                                  name="Star"
+                                  className={`h-4 w-4 ${i < Math.round(rating.average) ? 'text-yellow-400 fill-yellow-400' : 'text-gray-300'}`}
+                                />
+                              ))}
+                            </div>
+                            <span className="text-sm text-muted-foreground">
+                              {rating.average} ({rating.count})
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2 mb-2">
+                          <Badge variant="outline" className="text-xs">
+                            {toy.age} лет
+                          </Badge>
+                          <Badge variant="secondary" className="text-xs">
+                            {toy.category}
+                          </Badge>
+                        </div>
+                        <p className="text-2xl font-bold text-primary">
+                          {toy.price} ₽
+                        </p>
+                      </div>
+                    </CardContent>
+                    <CardFooter className="p-4 pt-0">
+                      <Button 
+                        className="w-full gap-2 group-hover:scale-105 transition-transform" 
+                        size="lg"
+                        disabled={!toy.inStock}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAddToCart(toy);
+                        }}
+                      >
+                        <Icon name="ShoppingBag" size={18} />
+                        В корзину
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                );
+              })}
             </div>
 
             {filteredToys.length === 0 && (
@@ -327,6 +438,17 @@ export default function Index() {
                 <p className="text-muted-foreground">Попробуйте изменить параметры поиска</p>
               </div>
             )}
+          </main>
+        </div>
+      </div>
+
+      {selectedProduct && (
+        <ProductModal
+          product={selectedProduct}
+          open={!!selectedProduct}
+          onClose={() => setSelectedProduct(null)}
+        />
+      )}
           </main>
         </div>
       </div>
