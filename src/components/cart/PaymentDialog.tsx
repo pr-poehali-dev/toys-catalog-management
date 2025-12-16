@@ -7,6 +7,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
 import Icon from '@/components/ui/icon';
 import { useCart } from '@/contexts/CartContext';
+import { useOrders } from '@/contexts/OrderContext';
 import { useToast } from '@/hooks/use-toast';
 
 interface PaymentDialogProps {
@@ -16,7 +17,8 @@ interface PaymentDialogProps {
 }
 
 const PaymentDialog = ({ open, onOpenChange, onClose }: PaymentDialogProps) => {
-  const { total, clearCart } = useCart();
+  const { total, items, clearCart } = useCart();
+  const { addOrder } = useOrders();
   const { toast } = useToast();
   const [step, setStep] = useState<'info' | 'payment'>('info');
   const [paymentMethod, setPaymentMethod] = useState('card');
@@ -42,6 +44,13 @@ const PaymentDialog = ({ open, onOpenChange, onClose }: PaymentDialogProps) => {
     setIsProcessing(true);
 
     setTimeout(() => {
+      addOrder({
+        items,
+        total,
+        paymentMethod,
+        customerInfo: formData,
+      });
+
       clearCart();
       setIsProcessing(false);
       onClose();

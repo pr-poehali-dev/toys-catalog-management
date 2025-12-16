@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
@@ -138,7 +139,15 @@ export default function Index() {
             <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent animate-fade-in">
               🎪 Магазин Игрушек
             </h1>
-            <CartDrawer />
+            <div className="flex items-center gap-3">
+              <Link to="/orders">
+                <Button variant="outline" size="lg" className="gap-2">
+                  <Icon name="Package" size={20} />
+                  <span className="hidden sm:inline">Мои заказы</span>
+                </Button>
+              </Link>
+              <CartDrawer />
+            </div>
           </div>
           
           <div className="relative">
